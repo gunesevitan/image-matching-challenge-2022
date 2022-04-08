@@ -1,4 +1,5 @@
 import cv2
+import matplotlib.pyplot as plt
 
 
 def get_sift_detector(n_features, n_octave_layers=3, contrast_threshold=0.09, edge_threshold=0.1, sigma=1.6):
@@ -49,3 +50,39 @@ def extract_sift_features(image, detector):
     keypoints, descriptors = detector.detectAndCompute(grayscale_image, None)
 
     return keypoints, descriptors
+
+
+def visualize_keypoints(source_image, keypoints, output_image, path=None):
+
+    """
+    Visualize keypoints drawn on image
+
+    Parameters
+    ----------
+    source_image [numpy.ndarray of shape (height, width, channel)]: Source image on which the keypoints are detected
+    keypoints [tuple of shape (n_keypoints)]: Keypoints detected on the source image
+    output_image [numpy.ndarray of shape (height, width, channel)]: Output image to draw keypoints
+    path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
+    """
+
+    image_keypoints = cv2.drawKeypoints(
+        image=source_image,
+        keypoints=keypoints,
+        outImage=output_image,
+        flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
+    )
+
+    fig, ax = plt.subplots(figsize=(16, 16))
+    ax.imshow(image_keypoints)
+
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    ax.tick_params(axis='x', labelsize=15, pad=10)
+    ax.tick_params(axis='y', labelsize=15, pad=10)
+    ax.set_title(f'Image Keypoints {image_keypoints.shape}', size=20, pad=15)
+
+    if path is None:
+        plt.show()
+    else:
+        plt.savefig(path)
+        plt.close(fig)
