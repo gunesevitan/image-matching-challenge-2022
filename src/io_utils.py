@@ -16,7 +16,7 @@ def read_pair_covisibility(scene, covisibility_threshold=0.1, shuffle=True):
 
     Returns
     -------
-    df_pair_covisibility [pandas.DataFrame of shape (n_pairs, 3)]: Dataframe with pair, covisibility and fundamental_matrix columns
+    df_pair_covisibility (pandas.DataFrame of shape (n_pairs, 3): Dataframe with pair, covisibility and fundamental_matrix columns
     """
 
     df_pair_covisibility = pd.read_csv(settings.DATA / 'train' / scene / 'pair_covisibility.csv')
@@ -41,7 +41,7 @@ def read_calibration(scene):
 
     Returns
     -------
-    df_calibration [pandas.DataFrame of shape (n_images, 4)]: Dataframe with image_id, camera_intrinsics, rotation_matrix and translation_vector columns
+    df_calibration (pandas.DataFrame of shape (n_images, 4)): Dataframe with image_id, camera_intrinsics, rotation_matrix and translation_vector columns
     """
 
     df_calibration = pd.read_csv(settings.DATA / 'train' / scene / 'calibration.csv')
