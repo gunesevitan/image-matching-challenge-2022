@@ -34,11 +34,11 @@ def visualize_matches(image1, keypoints1, image2, keypoints2, matches, path=None
 
     Parameters
     ----------
-    image1 [numpy.ndarray of shape (height, width, channel)]: First image
-    keypoints1 [tuple of shape (n_keypoints)]: Keypoints detected on the first image
-    image2 [numpy.ndarray of shape (height, width, channel)]: Second image
-    keypoints2 [tuple of shape (n_keypoints)]: Keypoints detected on the second image
-    matches [list of shape (n_matches)]: Matched features
+    image1 (numpy.ndarray of shape (height, width, channel)): First image
+    keypoints1 (tuple of shape (n_keypoints)): Keypoints detected on the first image
+    image2 (numpy.ndarray of shape (height, width, channel)): Second image
+    keypoints2 (tuple of shape (n_keypoints)): Keypoints detected on the second image
+    matches (list of shape (n_matches)): Matched features
     path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
     """
 

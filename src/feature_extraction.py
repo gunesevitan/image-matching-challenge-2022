@@ -37,13 +37,13 @@ def extract_sift_features(image, detector):
 
     Parameters
     ----------
-    image [numpy.ndarray of shape (height, width, channel)]: Image
+    image (numpy.ndarray of shape (height, width, channel)): Image
     detector (cv2.SIFT): SIFT feature detector
 
     Returns
     -------
-    keypoints [tuple of shape (n_features)]: Keypoints detected on the image
-    descriptors [np.ndarray of shape (n_features, 128)]: Descriptors extracted on the image
+    keypoints (tuple of shape (n_features)): Keypoints detected on the image
+    descriptors (np.ndarray of shape (n_features, 128)): Descriptors extracted on the image
     """
 
     grayscale_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -59,9 +59,9 @@ def visualize_keypoints(source_image, keypoints, output_image, path=None):
 
     Parameters
     ----------
-    source_image [numpy.ndarray of shape (height, width, channel)]: Source image on which the keypoints are detected
-    keypoints [tuple of shape (n_keypoints)]: Keypoints detected on the source image
-    output_image [numpy.ndarray of shape (height, width, channel)]: Output image to draw keypoints
+    source_image (numpy.ndarray of shape (height, width, channel)): Source image on which the keypoints are detected
+    keypoints (tuple of shape (n_keypoints)): Keypoints detected on the source image
+    output_image (numpy.ndarray of shape (height, width, channel)): Output image to draw keypoints
     path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
     """
 
