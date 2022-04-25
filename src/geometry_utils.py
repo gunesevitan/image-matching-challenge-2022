@@ -1,5 +1,4 @@
 import numpy as np
-import cv2
 
 
 def get_camera_calibration_from_dataframe(df_calibration, image_id):
@@ -80,34 +79,6 @@ def get_camera_extrinsics(rotation_matrix, translation_vector):
     return camera_extrinsics
 
 
-def get_essential_matrix(fundamental_matrix, camera_intrinsics1, camera_intrinsics2, keypoints1, keypoints2):
-
-    """
-    Get essential matrix
-
-    Parameters
-    ----------
-    fundamental_matrix (numpy.ndarray of shape (3, 3)): Array of fundamental matrix
-    camera_intrinsics1 (numpy.ndarray of shape (3, 3)): Array of camera properties of the first image
-    camera_intrinsics2 (numpy.ndarray of shape (3, 3)): Array of camera properties of the second image
-    keypoints1 (tuple of shape (n_keypoints)): Keypoints detected on the first image
-    keypoints2 (tuple of shape (n_keypoints)): Keypoints detected on the second image
-
-    Returns
-    -------
-    rotation_matrix (numpy.ndarray of shape (3, 3)): Array of directions of the world-axes in camera coordinates
-    translation_vector (numpy.ndarray of shape (3, 3)): Array of position of the world origin in camera coordinates
-
-    """
-
-    essential_matrix = np.matmul(np.matmul(camera_intrinsics2.T, fundamental_matrix), camera_intrinsics1).astype(np.float64)
-    normalized_keypoints1 = normalize_keypoints(keypoints=keypoints1, camera_intrinsics=camera_intrinsics1)
-    normalized_keypoints2 = normalize_keypoints(keypoints=keypoints2, camera_intrinsics=camera_intrinsics2)
-    n_inliers, rotation_matrix, translation_vector, inlier_mask = cv2.recoverPose(essential_matrix, normalized_keypoints1, normalized_keypoints2)
-
-    return rotation_matrix, translation_vector.flatten(), inlier_mask.flatten().astype(bool)
-
-
 def get_projection_matrix(camera_intrinsics, rotation_matrix, translation_vector):
 
     """
@@ -130,25 +101,77 @@ def get_projection_matrix(camera_intrinsics, rotation_matrix, translation_vector
     return projection_matrix
 
 
-def normalize_keypoints(keypoints, camera_intrinsics):
+def decompose_fundamental_matrix_with_camera_intrinsics(fundamental_matrix, camera_intrinsics1, camera_intrinsics2):
 
     """
-    Normalize detected keypoints using camera intrinsics
+    Decompose fundamental matrix into rotation matrices and translation vector
 
     Parameters
     ----------
-    keypoints (np.ndarray of shape (n_keypoints, 2)): Keypoints detected on the source image
-    camera_intrinsics (numpy.ndarray of shape (3, 3)): Array of camera properties that determine the transformation between 3D points and 2D (pixel) coordinates
+    fundamental_matrix (numpy.ndarray of shape (3, 3)): Array of fundamental matrix
+    camera_intrinsics1 (numpy.ndarray of shape (3, 3)): Array of camera intrinsics from the first image
+    camera_intrinsics2 (numpy.ndarray of shape (3, 3)): Array of camera intrinsics from the second image
 
     Returns
     -------
-    normalized_keypoints (numpy.ndarray of shape (n_keypoints, 2)): Normalized keypoints
+    rotation_matrix1 (numpy.ndarray of shape (3, 3)): Array of directions of the world-axes in camera coordinates for the first image
+    rotation_matrix2 (numpy.ndarray of shape (3, 3)): Array of directions of the world-axes in camera coordinates for the second image
+    translation_vector (numpy.ndarray of shape (3)): Array of position of the world origin in camera coordinates
     """
 
-    focal_length_x = camera_intrinsics[0, 0]
-    focal_length_y = camera_intrinsics[1, 1]
-    principal_point_offset_u = camera_intrinsics[0, 2]
-    principal_point_offset_v = camera_intrinsics[1, 2]
+    essential_matrix = np.matmul(camera_intrinsics2.T, np.matmul(fundamental_matrix, camera_intrinsics1)).astype(np.float64)
+    u, s, v = np.linalg.svd(essential_matrix)
 
-    normalized_keypoints = (keypoints - np.array([[principal_point_offset_u, principal_point_offset_v]])) / np.array([[focal_length_x, focal_length_y]])
-    return normalized_keypoints
+    if np.linalg.det(u) < 0:
+        u *= -1
+    if np.linalg.det(v) < 0:
+        v *= -1
+
+    w = np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
+    rotation_matrix1 = np.matmul(u, np.matmul(w, v))
+    rotation_matrix2 = np.matmul(u, np.matmul(w.T, v))
+    translation_vector = u[:, -1]
+
+    return rotation_matrix1, rotation_matrix2, translation_vector
+
+
+def rotation_matrix_to_quaternion(rotation_matrix):
+
+    """
+    Convert rotation matrix to quaternion
+
+    Parameters
+    ----------
+    rotation_matrix (numpy.ndarray of shape (3, 3)): Array of directions of the world-axes in camera coordinates
+
+    Returns
+    -------
+    quaternion (numpy.ndarray of shape (4)): Array of quaternion
+    """
+
+    r00 = rotation_matrix[0, 0]
+    r01 = rotation_matrix[0, 1]
+    r02 = rotation_matrix[0, 2]
+    r10 = rotation_matrix[1, 0]
+    r11 = rotation_matrix[1, 1]
+    r12 = rotation_matrix[1, 2]
+    r20 = rotation_matrix[2, 0]
+    r21 = rotation_matrix[2, 1]
+    r22 = rotation_matrix[2, 2]
+
+    k = np.array(
+        [[r00 - r11 - r22, 0.0, 0.0, 0.0],
+         [r01 + r10, r11 - r00 - r22, 0.0, 0.0],
+         [r02 + r20, r12 + r21, r22 - r00 - r11, 0.0],
+         [r21 - r12, r02 - r20, r10 - r01, r00 + r11 + r22]]
+    )
+    k /= 3.0
+
+    # Quaternion is the eigenvector of k that corresponds to the largest eigenvalue
+    w, v = np.linalg.eigh(k)
+    quaternion = v[[3, 0, 1, 2], np.argmax(w)]
+
+    if quaternion[0] < 0:
+        np.negative(quaternion, quaternion)
+
+    return quaternion
