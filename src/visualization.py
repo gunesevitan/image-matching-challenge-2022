@@ -1,4 +1,6 @@
 import os
+import pathlib
+import numpy as np
 import pandas as pd
 import cv2
 import matplotlib.pyplot as plt
@@ -6,19 +8,30 @@ import matplotlib.pyplot as plt
 import settings
 
 
-def visualize_image(image_path, path=None):
+def visualize_image(image, path=None):
 
     """
-    Visualize raw image
+    Visualize image along with its mask
 
     Parameters
     ----------
-    image_path (str): Image path relative to data path
-    path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
+    image (str or numpy.ndarray of shape (height, width, 3)): Image path relative to data directory or image array
+    path (path-like str or None): Path of the output file or None (if path is None, plot is displayed with selected backend)
     """
 
-    image = cv2.imread(f'{settings.DATA}/{image_path}')
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    if isinstance(image, pathlib.Path) or isinstance(image, str):
+        # Read image from the given path
+        image_path = image
+        image = cv2.imread(str(settings.DATA / image_path))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        title = image_path
+
+    elif isinstance(image, np.ndarray):
+        title = f'Image {image.shape}'
+
+    else:
+        # Raise TypeError if image argument is not an array-like object or a path-like string
+        raise TypeError('Image is not an array or path.')
 
     fig, ax = plt.subplots(figsize=(16, 16))
     ax.imshow(image)
@@ -27,7 +40,7 @@ def visualize_image(image_path, path=None):
     ax.set_ylabel('')
     ax.tick_params(axis='x', labelsize=15, pad=10)
     ax.tick_params(axis='y', labelsize=15, pad=10)
-    ax.set_title(f'{image_path} - {image.shape}', size=20, pad=15)
+    ax.set_title(title, size=20, pad=15)
 
     if path is None:
         plt.show()
@@ -84,7 +97,7 @@ def visualize_covisibility_histogram(df_pair_covisibility, scene, path=None):
 
     Parameters
     ----------
-    df_pair_covisibility [pandas.DataFrame of shape (n_pairs, 3)]: Dataframe with pair, covisibility and fundamental_matrix columns
+    df_pair_covisibility (pandas.DataFrame of shape (n_pairs, 3)): Dataframe with pair, covisibility and fundamental_matrix columns
     scene (str): Name of the scene
     path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
     """
