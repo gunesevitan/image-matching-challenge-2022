@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-import imutils
 
 
 def resize_with_aspect_ratio(image, longest_edge=1280):
@@ -19,13 +18,7 @@ def resize_with_aspect_ratio(image, longest_edge=1280):
     """
 
     height, width = image.shape[:2]
-
-    if np.maximum(height, width) <= longest_edge:
-        return image
-
-    if height >= width:
-        image = imutils.resize(image, height=longest_edge, inter=cv2.INTER_LANCZOS4)
-    else:
-        image = imutils.resize(image, width=longest_edge, inter=cv2.INTER_LANCZOS4)
+    scale = longest_edge / max(height, width)
+    image = cv2.resize(image, dsize=(int(width * scale), int(height * scale)), interpolation=cv2.INTER_LANCZOS4)
 
     return image
