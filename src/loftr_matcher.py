@@ -39,6 +39,8 @@ if __name__ == '__main__':
 
             for idx, row in df_pair_covisibility.iterrows():
 
+                print(f'Evaluating predictions on {scene} - {len(df_pair_covisibility)} pairs {df_pair_covisibility["covisibility"].mean():.4f} average covisibility')
+
                 # Get ground-truth camera intrinsics, rotation matrix and translation vector
                 image1_id, image2_id = row['pair'].split('-')
                 image1_camera_intrinsics, image1_rotation_matrix, image1_translation_vector = geometry_utils.get_camera_calibration_from_dataframe(
@@ -118,7 +120,7 @@ if __name__ == '__main__':
                     'rotation_error': rotation_error,
                     'translation_error': translation_error
                 })
-                print(f'Pair: {row["pair"]} ({row["covisibility"]} covisibility) - Rotation Error {rotation_error:.4f} - Translation Error {translation_error:4f}')
+                print(f'Pair [{idx + 1 }/{len(df_pair_covisibility)}]: {row["pair"]} ({row["covisibility"]} covisibility) - Rotation Error {rotation_error:.4f} - Translation Error {translation_error:4f}')
 
                 # Visualize matched inlier keypoints for the image pair
                 if config['visualize']:
