@@ -36,10 +36,9 @@ if __name__ == '__main__':
                 covisibility_threshold=config['scene_covisibility_threshold'][scene]
             )
             scene_errors = []
+            print(f'Evaluating predictions on {scene} - {len(df_pair_covisibility)} pairs {df_pair_covisibility["covisibility"].mean():.4f} average covisibility')
 
             for idx, row in df_pair_covisibility.iterrows():
-
-                print(f'Evaluating predictions on {scene} - {len(df_pair_covisibility)} pairs {df_pair_covisibility["covisibility"].mean():.4f} average covisibility')
 
                 # Get ground-truth camera intrinsics, rotation matrix and translation vector
                 image1_id, image2_id = row['pair'].split('-')
