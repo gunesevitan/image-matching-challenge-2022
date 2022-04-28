@@ -4,7 +4,7 @@ import pandas as pd
 import settings
 
 
-def read_pair_covisibility(scene, covisibility_threshold=0.1, shuffle=True, random_state=42):
+def read_pair_covisibility(scene, n_pairs, covisibility_threshold=0.1, random_state=42):
 
     """
     Read pair_covisibility.csv file of the given scene
@@ -12,8 +12,8 @@ def read_pair_covisibility(scene, covisibility_threshold=0.1, shuffle=True, rand
     Parameters
     ----------
     scene (str): Scene name
+    n_pairs (int): Number of pairs to retrieve
     covisibility_threshold (float): Threshold for filtering out low covisible pairs
-    shuffle (bool): Whether to shuffle pairs or not
     random_state (int): Seed for reproducible results
 
     Returns
@@ -26,9 +26,8 @@ def read_pair_covisibility(scene, covisibility_threshold=0.1, shuffle=True, rand
     if covisibility_threshold >= 0.:
         df_pair_covisibility = df_pair_covisibility.loc[df_pair_covisibility['covisibility'] >= covisibility_threshold, :]
 
-    if shuffle:
-        np.random.seed(random_state)
-        df_pair_covisibility = df_pair_covisibility.sample(frac=1).reset_index(drop=True)
+    np.random.seed(random_state)
+    df_pair_covisibility = df_pair_covisibility.sample(n=n_pairs).reset_index(drop=True)
 
     return df_pair_covisibility
 

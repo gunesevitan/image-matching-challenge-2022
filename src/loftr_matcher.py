@@ -32,6 +32,7 @@ if __name__ == '__main__':
             df_calibration = io_utils.read_calibration(scene=scene)
             df_pair_covisibility = io_utils.read_pair_covisibility(
                 scene=scene,
+                n_pairs=config['n_pairs'],
                 covisibility_threshold=config['scene_covisibility_threshold'][scene]
             )
             scene_errors = []
