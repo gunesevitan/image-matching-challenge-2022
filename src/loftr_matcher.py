@@ -67,9 +67,9 @@ if __name__ == '__main__':
                     longest_edge=config['image_longest_edge'],
                     device=config['device']
                 )
-                output = loftr_utils.match(image1=image1, image2=image2, matcher=matcher)
+                output = loftr_utils.match(image1=image1, image2=image2, matcher=matcher, confidence_threshold=config['keypoint_confidence_threshold'])
 
-                if len(output['keypoints0']) > config['keypoint_threshold']:
+                if len(output['keypoints0']) > config['keypoint_number_threshold']:
                     # Estimate fundamental matrix using predicted keypoints if number of keypoints is more than the specified threshold
                     estimated_fundamental_matrix, inliers = loftr_utils.get_fundamental_matrix(
                         keypoints1=output['keypoints0'],
@@ -170,9 +170,9 @@ if __name__ == '__main__':
                 longest_edge=config['image_longest_edge'],
                 device=config['device']
             )
-            output = loftr_utils.match(image1=image1, image2=image2, matcher=matcher)
+            output = loftr_utils.match(image1=image1, image2=image2, matcher=matcher, confidence_threshold=config['keypoint_confidence_threshold'])
 
-            if len(output['keypoints0']) > config['keypoint_threshold']:
+            if len(output['keypoints0']) > config['keypoint_number_threshold']:
                 # Estimate fundamental matrix using predicted keypoints if number of keypoints is more than the specified threshold
                 estimated_fundamental_matrix, inliers = loftr_utils.get_fundamental_matrix(
                     keypoints1=output['keypoints0'],

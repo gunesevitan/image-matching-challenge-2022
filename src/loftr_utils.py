@@ -39,7 +39,7 @@ def get_image_tensor(image, longest_edge, device):
     return image
 
 
-def match(image1, image2, matcher):
+def match(image1, image2, matcher, confidence_threshold=0.1):
 
     """
     Match given two with images with each other using matcher
@@ -49,6 +49,7 @@ def match(image1, image2, matcher):
     image1 (torch.Tensor of shape (1, 3, height, width)): First image tensor
     image2 (torch.Tensor of shape (1, 3, height, width)): Second image tensor
     matcher (torch.nn.Module): LoFTR Model
+    confidence_threshold (float): Threshold to filter out keypoints with low confidence
 
     Returns
     -------
@@ -71,6 +72,13 @@ def match(image1, image2, matcher):
         'keypoints0': correspondences['keypoints0'].cpu().numpy(),
         'keypoints1': correspondences['keypoints1'].cpu().numpy(),
         'confidence': correspondences['confidence'].cpu().numpy(),
+    }
+
+    keypoint_mask = output['confidence'] >= confidence_threshold
+    output = {
+        'keypoints0': output['keypoints0'][keypoint_mask],
+        'keypoints1': output['keypoints1'][keypoint_mask],
+        'confidence': output['confidence'][keypoint_mask],
     }
 
     return output
