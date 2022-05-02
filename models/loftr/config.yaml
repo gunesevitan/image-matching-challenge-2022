@@ -1,4 +1,4 @@
-task: validation
+task: inference
 n_pairs: 500
 scene_covisibility_threshold:
   brandenburg_gate: 0.1
@@ -18,8 +18,9 @@ scene_covisibility_threshold:
   temple_nara_japan: 0.1
   trevi_fountain: 0.1
 
-image_longest_edge: 1280
-keypoint_threshold: 10
+image_longest_edge: 840
+keypoint_confidence_threshold: 0.25
+keypoint_number_threshold: 7
 ransac_reproj_threshold: 0.25
 ransac_confidence: 0.99999
 ransac_max_iters: 100000
