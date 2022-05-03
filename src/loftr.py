@@ -1,84 +1,50 @@
-import pathlib
-import cv2
 import torch
 import kornia
 from kornia.feature import laf_from_center_scale_ori
 from kornia_moons.feature import draw_LAF_matches
 import matplotlib.pyplot as plt
 
-import settings
-import image_utils
 
-
-def get_image_tensor(image, longest_edge, device):
+def match(image1, image2, loftr_model, confidence_threshold=0.1):
 
     """
-    Load image and move it to specified device
+    Match given two images with each other using LoFTR model
 
     Parameters
     ----------
-    image (str or numpy.ndarray of shape (height, width, 3)): Image path relative to data directory or image array
-    longest_edge (int): Number of pixels on the longest edge
-    device (torch.device): Location of image tensor
-
-    Returns
-    -------
-    image (torch.Tensor of shape (1, 3, height, width)): Image tensor
-    """
-
-    if isinstance(image, pathlib.Path) or isinstance(image, str):
-        # Read image from the given path
-        image_path = image
-        image = cv2.imread(str(settings.DATA / image_path))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    image = image_utils.resize_with_aspect_ratio(image=image, longest_edge=longest_edge)
-    image = kornia.image_to_tensor(image, False).float() / 255.
-    image = image.to(device)
-
-    return image
-
-
-def match(image1, image2, matcher, confidence_threshold=0.1):
-
-    """
-    Match given two with images with each other using matcher
-
-    Parameters
-    ----------
-    image1 (torch.Tensor of shape (1, 3, height, width)): First image tensor
-    image2 (torch.Tensor of shape (1, 3, height, width)): Second image tensor
-    matcher (torch.nn.Module): LoFTR Model
+    image1 (torch.Tensor of shape (1, 1, height, width)): First image tensor
+    image2 (torch.Tensor of shape (1, 1, height, width)): Second image tensor
+    loftr_model (torch.nn.Module): LoFTR Model
     confidence_threshold (float): Threshold to filter out keypoints with low confidence
 
     Returns
     -------
     output (dictionary of
-            keypoints0 (numpy.ndarray of shape (n_keypoints, 2)),
             keypoints1 (numpy.ndarray of shape (n_keypoints, 2)),
-            confidence (numpy.ndarray of shape (n_keypoints))
-    ): Keypoints from first and second image and their confidences
+            keypoints2 (numpy.ndarray of shape (n_keypoints, 2)),
+            confidences (numpy.ndarray of shape (n_keypoints))
+    ): Matched keypoints from first and second image and their confidences
     """
 
     input_dict = {
-        'image0': kornia.color.rgb_to_grayscale(image1),
-        'image1': kornia.color.rgb_to_grayscale(image2)
+        'image0': image1,
+        'image1': image2
     }
 
     with torch.no_grad():
-        correspondences = matcher(input_dict)
+        correspondences = loftr_model(input_dict)
 
     output = {
-        'keypoints0': correspondences['keypoints0'].cpu().numpy(),
-        'keypoints1': correspondences['keypoints1'].cpu().numpy(),
-        'confidence': correspondences['confidence'].cpu().numpy(),
+        'keypoints1': correspondences['keypoints0'].cpu().numpy(),
+        'keypoints2': correspondences['keypoints1'].cpu().numpy(),
+        'confidences': correspondences['confidence'].cpu().numpy(),
     }
 
-    keypoint_mask = output['confidence'] >= confidence_threshold
+    keypoint_mask = output['confidences'] >= confidence_threshold
     output = {
-        'keypoints0': output['keypoints0'][keypoint_mask],
         'keypoints1': output['keypoints1'][keypoint_mask],
-        'confidence': output['confidence'][keypoint_mask],
+        'keypoints2': output['keypoints2'][keypoint_mask],
+        'confidences': output['confidences'][keypoint_mask],
     }
 
     return output
