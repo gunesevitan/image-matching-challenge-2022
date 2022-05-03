@@ -1,7 +1,7 @@
 import torch
 from kornia.feature import \
-    LocalFeature, PassLAF, LAFOrienter, PatchDominantGradientOrientation, OriNet,\
-    LAFAffNetShapeEstimator, KeyNetDetector, LAFDescriptor, HardNet8, HyNet, TFeat, SOSNet
+    LocalFeature, PassLAF, LAFOrienter, PatchDominantGradientOrientation, OriNet, LAFAffNetShapeEstimator,\
+    KeyNetDetector, LAFDescriptor, HardNet8, HyNet, TFeat, SOSNet, get_laf_center
 
 import settings
 
@@ -28,7 +28,16 @@ class LocalFeatureDetectorDescriptor(LocalFeature):
         detector_module_weights (str): Path of the detector module weights relative to models/deep_local_feature_detector_descriptors
         descriptor_module_name (str): Name of the descriptor module
         descriptor_module_weights (str): Path of the descriptor module weights relative to models/deep_local_feature_detector_descriptors
+        device (torch.device): Location of model
+
+        Returns
+        -------
+        lafs (torch.Tensor of shape (1, n_detections, 2, 3)): Detected local affine frames
+        responses (torch.Tensor of shape (1, n_detections)): Response function values for corresponding lafs
+        descriptors (torch.Tensor of shape (1, n_detections, n_dimensions)): Local descriptors
         """
+
+        device = torch.device(device)
 
         # Instantiate specified orientation module
         if orientation_module_name == 'PassLAF':
@@ -42,7 +51,7 @@ class LocalFeatureDetectorDescriptor(LocalFeature):
 
         # Instantiate specified affine module
         if affine_module_name == 'LAFAffNetShapeEstimator':
-            affine_module = LAFAffNetShapeEstimator(pretrained=(affine_module_weights is None)).eval()
+            affine_module = LAFAffNetShapeEstimator(pretrained=(affine_module_weights is None))
         else:
             affine_module = None
 
@@ -53,9 +62,12 @@ class LocalFeatureDetectorDescriptor(LocalFeature):
             detector_module = None
 
         # Load pretrained weights for the detector module
-        detector_module.ori.angle_detector.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / orientation_module_weights)['state_dict'])
-        detector_module.aff.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / affine_module_weights)['state_dict'])
-        detector_module.model.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / detector_module_weights)['state_dict'])
+        if orientation_module_weights is not None:
+            detector_module.ori.angle_detector.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / orientation_module_weights)['state_dict'])
+        if affine_module_weights is not None:
+            detector_module.aff.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / affine_module_weights)['state_dict'])
+        if detector_module_weights is not None:
+            detector_module.model.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / detector_module_weights)['state_dict'])
 
         # Instantiate specified descriptor module
         if descriptor_module_name == 'HardNet8':
@@ -70,6 +82,97 @@ class LocalFeatureDetectorDescriptor(LocalFeature):
             descriptor_module = None
 
         # Load pretrained weights for the descriptor module
-        descriptor_module.descriptor.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / detector_module_weights))
+        if descriptor_module_weights is not None:
+            descriptor_module.descriptor.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / descriptor_module_weights))
 
         super().__init__(detector_module, descriptor_module)
+
+
+def _extract_features(image, feature_extractor):
+
+    """
+    Extract local feature descriptors on given image with given model
+
+    Parameters
+    ----------
+    image (torch.Tensor of shape (1, 1, height, width)): Image tensor
+    feature_extractor (torch.nn.Module): Local feature detector and descriptor model
+
+    Returns
+    -------
+    lafs (torch.Tensor of shape (1, n_detections, 2, 3)): Detected local affine frames
+    responses (torch.Tensor of shape (n_detections)): Response function values for corresponding lafs
+    descriptors (torch.Tensor of shape (n_detections, n_dimensions)): Local descriptors
+    keypoints (numpy.ndarray of shape (n_detections, 2)): Keypoints
+    """
+
+    with torch.no_grad():
+        lafs, responses, descriptors = feature_extractor(image)
+
+    lafs = lafs.detach().cpu().numpy()
+    responses = torch.squeeze(responses, dim=0).detach().cpu().numpy()
+    descriptors = torch.squeeze(descriptors, dim=0)
+    keypoints = get_laf_center(lafs)
+    keypoints = keypoints.detach().cpu().numpy().reshape(-1, 2)
+
+    return lafs, responses, descriptors, keypoints
+
+
+def _match_descriptors(descriptors1, descriptors2, descriptor_matcher):
+
+    """
+    Match descriptors with nearest neighbor algorithm
+
+    Parameters
+    ----------
+    descriptors1 (torch.Tensor of shape (n_detections, n_dimensions)): Descriptors from first image
+    descriptors2 (torch.Tensor of shape (n_detections, n_dimensions)): Descriptors from second image
+    descriptor_matcher (torch.nn.Module): Descriptor matcher model
+
+    Returns
+    -------
+    distances (numpy.ndarray of shape (n_matches)): Distances of matching descriptors
+    indexes (numpy.ndarray of shape (n_matches, 2)): Indexes of matching descriptors
+    """
+
+    with torch.no_grad():
+        distances, indexes = descriptor_matcher(descriptors1, descriptors2)
+
+    distances = distances.detach().cpu().numpy().reshape(-1)
+    indexes = indexes.detach().cpu().numpy()
+
+    return distances, indexes
+
+
+def match(image1, image2, feature_extractor, descriptor_matcher):
+
+    """
+    Match given two images with each other using given feature extractor and descriptor matcher
+
+    Parameters
+    ----------
+    image1 (torch.Tensor of shape (1, 1, height, width)): First image tensor
+    image2 (torch.Tensor of shape (1, 1, height, width)): Second image tensor
+    feature_extractor (torch.nn.Module): Local feature detector and descriptor model
+    descriptor_matcher (torch.nn.Module): Descriptor matcher model
+
+    Returns
+    -------
+    output (dictionary of
+            keypoints1 (numpy.ndarray of shape (n_keypoints, 2)),
+            keypoints2 (numpy.ndarray of shape (n_keypoints, 2)),
+            confidence (numpy.ndarray of shape (n_keypoints))
+    ): Matched keypoints from first and second image and their distances
+    """
+
+    _, _, descriptors1, keypoints1 = _extract_features(image=image1, feature_extractor=feature_extractor)
+    _, _, descriptors2, keypoints2 = _extract_features(image=image2, feature_extractor=feature_extractor)
+    distances, indexes = _match_descriptors(descriptors1=descriptors1, descriptors2=descriptors2, descriptor_matcher=descriptor_matcher)
+
+    output = {
+        'keypoints1': keypoints1[indexes[:, 0]],
+        'keypoints2': keypoints2[indexes[:, 1]],
+        'distances': distances
+    }
+
+    return output
