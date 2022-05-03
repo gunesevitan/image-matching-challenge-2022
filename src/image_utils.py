@@ -56,7 +56,7 @@ def get_image_tensor(image, device, longest_edge=840, normalize='max_pixel_value
         image = resize_with_aspect_ratio(image=image, longest_edge=longest_edge)
 
     if normalize == 'max_pixel_value':
-        image /= 255.
+        image = image / 255.
     elif normalize == 'dataset_statistics':
         image = (image - np.array([128.01498015, 128.7181146, 126.2084097])) / np.array([68.81605695, 70.68666045, 76.6746954])
 
