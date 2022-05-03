@@ -20,7 +20,7 @@ if __name__ == '__main__':
     if config['task'] == 'validation':
 
         device = torch.device(config['device'])
-        matcher = LoFTR()
+        matcher = LoFTR(pretrained='outdoor')
         matcher = matcher.to(device).eval()
 
         scaling_factors = pd.read_csv(settings.DATA / 'train' / 'scaling_factors.csv').set_index('scene')['scaling_factor'].to_dict()
@@ -154,7 +154,7 @@ if __name__ == '__main__':
         df = pd.read_csv(settings.DATA / 'test.csv')
 
         device = torch.device(config['device'])
-        matcher = LoFTR()
+        matcher = LoFTR(pretrained='outdoor')
         matcher = matcher.to(device).eval()
 
         for idx, row in df.iterrows():
@@ -196,3 +196,5 @@ if __name__ == '__main__':
                     keypoints2=output['keypoints1'],
                     inliers=inliers
                 )
+
+            break
