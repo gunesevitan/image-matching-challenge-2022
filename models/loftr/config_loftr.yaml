@@ -1,0 +1,11 @@
+preprocessing_parameters:
+  image_longest_edge: 840
+  image_normalize: max_pixel_value
+  image_grayscale: True
+
+model_parameters:
+  pretrained: outdoor
+  device: cuda
+
+matching_parameters:
+  keypoint_confidence_threshold: 0.0
