@@ -3,6 +3,10 @@ import pathlib
 import numpy as np
 import pandas as pd
 import cv2
+import torch
+import kornia
+from kornia.feature import laf_from_center_scale_ori
+from kornia_moons.feature import draw_LAF_matches
 import matplotlib.pyplot as plt
 
 import settings
@@ -125,6 +129,50 @@ def visualize_covisibility_histogram(df_pair_covisibility, scene, path=None):
     else:
         plt.savefig(path)
         plt.close(fig)
+
+
+def visualize_matches(image1, image2, keypoints1, keypoints2, inliers, path=None):
+
+    """
+    Visualize matched keypoints of an image pair
+
+    Parameters
+    ----------
+    image1 (torch.Tensor of shape (1, 3, height, width)): First image tensor
+    image2 (torch.Tensor of shape (1, 3, height, width)): Second image tensor
+    keypoints1 (numpy.ndarray of shape (n_keypoints, 2)): Keypoints from first image
+    keypoints2 (numpy.ndarray of shape (n_keypoints, 2)): Keypoints from second image
+    inliers (numpy.ndarray of shape (n_keypoints)): Inlier mask
+    path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
+    """
+
+    draw_LAF_matches(
+        lafs1=laf_from_center_scale_ori(
+            torch.from_numpy(keypoints1).view(1, -1, 2),
+            torch.ones(keypoints1.shape[0]).view(1, -1, 1, 1),
+            torch.ones(keypoints1.shape[0]).view(1, -1, 1)
+        ),
+        lafs2=laf_from_center_scale_ori(
+            torch.from_numpy(keypoints2).view(1, -1, 2),
+            torch.ones(keypoints2.shape[0]).view(1, -1, 1, 1),
+            torch.ones(keypoints2.shape[0]).view(1, -1, 1)
+         ),
+        tent_idxs=torch.arange(keypoints1.shape[0]).view(-1, 1).repeat(1, 2),
+        img1=kornia.tensor_to_image(image1),
+        img2=kornia.tensor_to_image(image2),
+        inlier_mask=inliers,
+        draw_dict={
+            'inlier_color': (0.2, 1, 0.2),
+            'tentative_color': None,
+            'feature_color': (0.2, 0.5, 1),
+            'vertical': False
+        }
+    )
+
+    if path is None:
+        plt.show()
+    else:
+        plt.savefig(path)
 
 
 if __name__ == '__main__':
