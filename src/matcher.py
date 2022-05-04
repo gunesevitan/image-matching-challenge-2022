@@ -2,38 +2,50 @@ import yaml
 import numpy as np
 import pandas as pd
 import torch
-from kornia.feature import LoFTR
+from kornia.feature import LoFTR, DescriptorMatcher
 import warnings
 
 import settings
 import io_utils
-import geometry_utils
-import loftr_utils
+import image_utils
+import geometry
+import loftr
+import lfdd
+import solver
 import metrics
+import visualization
 
 
 if __name__ == '__main__':
 
     warnings.filterwarnings('ignore')
-    config = yaml.load(open(settings.MODELS / 'loftr' / 'config.yaml', 'r'), Loader=yaml.FullLoader)
+    matcher_config = yaml.load(open(settings.MODELS / 'matcher' / 'config_matcher.yaml', 'r'), Loader=yaml.FullLoader)
+    loftr_config = yaml.load(open(settings.MODELS / 'loftr' / 'config_loftr.yaml', 'r'), Loader=yaml.FullLoader)
+    lfdd_config = yaml.load(open(settings.MODELS / 'lfdd' / 'config_lfdd.yaml', 'r'), Loader=yaml.FullLoader)
 
-    if config['task'] == 'validation':
+    if matcher_config['task'] == 'validation':
 
-        device = torch.device(config['device'])
-        matcher = LoFTR(pretrained='outdoor')
-        matcher = matcher.to(device).eval()
+        # Load pretrained weights for LoFTR model
+        device = torch.device(loftr_config['model_parameters']['device'])
+        loftr_model = LoFTR(loftr_config['model_parameters']['pretrained'])
+        loftr_model = loftr_model.to(device).eval()
+        # Load pretrained weights for LFDD model
+        lfdd_feature_extractor = lfdd.LocalFeatureDetectorDescriptor(**lfdd_config['model_parameters'])
+        lfdd_feature_extractor = lfdd_feature_extractor.to(device).eval()
+        lfdd_descriptor_matcher = DescriptorMatcher(**lfdd_config['matcher_parameters'])
+        lfdd_descriptor_matcher = lfdd_descriptor_matcher.to(device).eval()
 
         scaling_factors = pd.read_csv(settings.DATA / 'train' / 'scaling_factors.csv').set_index('scene')['scaling_factor'].to_dict()
         mean_average_accuracies = []
 
-        for scene in list(config['scene_covisibility_threshold'].keys()):
+        for scene in list(matcher_config['scene_covisibility_threshold'].keys()):
 
             # Read camera calibration and filtered pair covisibility data for the scene
             df_calibration = io_utils.read_calibration(scene=scene)
             df_pair_covisibility = io_utils.read_pair_covisibility(
                 scene=scene,
-                n_pairs=config['n_pairs'],
-                covisibility_threshold=config['scene_covisibility_threshold'][scene]
+                n_pairs=matcher_config['validation_pairs'],
+                covisibility_threshold=matcher_config['scene_covisibility_threshold'][scene]
             )
             scene_errors = []
             print(f'Evaluating predictions on {scene} - {len(df_pair_covisibility)} pairs {df_pair_covisibility["covisibility"].mean():.4f} average covisibility')
@@ -42,41 +54,87 @@ if __name__ == '__main__':
 
                 # Get ground-truth camera intrinsics, rotation matrix and translation vector
                 image1_id, image2_id = row['pair'].split('-')
-                image1_camera_intrinsics, image1_rotation_matrix, image1_translation_vector = geometry_utils.get_camera_calibration_from_dataframe(
+                image1_camera_intrinsics, image1_rotation_matrix, image1_translation_vector = geometry.get_camera_calibration_from_dataframe(
                     df_calibration=df_calibration,
                     image_id=image1_id
                 )
-                image2_camera_intrinsics, image2_rotation_matrix, image2_translation_vector = geometry_utils.get_camera_calibration_from_dataframe(
+                image2_camera_intrinsics, image2_rotation_matrix, image2_translation_vector = geometry.get_camera_calibration_from_dataframe(
                     df_calibration=df_calibration,
                     image_id=image2_id
                 )
                 # Get ground truth fundamental matrix
-                ground_truth_fundamental_matrix = geometry_utils.get_fundamental_matrix_from_dataframe(
+                ground_truth_fundamental_matrix = geometry.get_fundamental_matrix_from_dataframe(
                     df_pair_covisibility=df_pair_covisibility,
                     pair=f'{image1_id}-{image2_id}'
                 )
 
-                # Create image tensors and predict keypoints using LoFTR model
-                image1 = loftr_utils.get_image_tensor(
+                # Create image tensors from the image pair and match keypoints using LoFTR model
+                loftr_image1 = image_utils.get_image_tensor(
                     image=f'{settings.DATA}/train/{scene}/images/{image1_id}.jpg',
-                    longest_edge=config['image_longest_edge'],
-                    device=config['device']
-                )
-                image2 = loftr_utils.get_image_tensor(
-                    image=f'{settings.DATA}/train/{scene}/images/{image2_id}.jpg',
-                    longest_edge=config['image_longest_edge'],
-                    device=config['device']
-                )
-                output = loftr_utils.match(image1=image1, image2=image2, matcher=matcher, confidence_threshold=config['keypoint_confidence_threshold'])
+                    device=loftr_config['model_parameters']['device'],
+                    longest_edge=loftr_config['preprocessing_parameters']['image_longest_edge'],
+                    normalize=loftr_config['preprocessing_parameters']['image_normalize'],
+                    grayscale=loftr_config['preprocessing_parameters']['image_grayscale']
 
-                if len(output['keypoints0']) > config['keypoint_number_threshold']:
+                )
+                loftr_image2 = image_utils.get_image_tensor(
+                    image=f'{settings.DATA}/train/{scene}/images/{image2_id}.jpg',
+                    device=loftr_config['model_parameters']['device'],
+                    longest_edge=loftr_config['preprocessing_parameters']['image_longest_edge'],
+                    normalize=loftr_config['preprocessing_parameters']['image_normalize'],
+                    grayscale=loftr_config['preprocessing_parameters']['image_grayscale']
+                )
+                loftr_output = loftr.match(
+                    image1=loftr_image1,
+                    image2=loftr_image2,
+                    loftr_model=loftr_model,
+                    confidence_threshold=loftr_config['matching_parameters']['keypoint_confidence_threshold']
+                )
+                if matcher_config['visualize'] is False:
+                    del loftr_image1, loftr_image2
+                    torch.cuda.empty_cache()
+
+                # Create image tensors from the image pair and match keypoints using LFDD model
+                lfdd_image1 = image_utils.get_image_tensor(
+                    image=f'{settings.DATA}/train/{scene}/images/{image1_id}.jpg',
+                    device=lfdd_config['model_parameters']['device'],
+                    longest_edge=lfdd_config['preprocessing_parameters']['image_longest_edge'],
+                    normalize=lfdd_config['preprocessing_parameters']['image_normalize'],
+                    grayscale=lfdd_config['preprocessing_parameters']['image_grayscale']
+                )
+                lfdd_image2 = image_utils.get_image_tensor(
+                    image=f'{settings.DATA}/train/{scene}/images/{image2_id}.jpg',
+                    device=lfdd_config['model_parameters']['device'],
+                    longest_edge=lfdd_config['preprocessing_parameters']['image_longest_edge'],
+                    normalize=lfdd_config['preprocessing_parameters']['image_normalize'],
+                    grayscale=lfdd_config['preprocessing_parameters']['image_grayscale']
+                )
+                lfdd_output = lfdd.match(
+                    image1=lfdd_image1,
+                    image2=lfdd_image2,
+                    feature_extractor=lfdd_feature_extractor,
+                    descriptor_matcher=lfdd_descriptor_matcher,
+                    distance_threshold=lfdd_config['matching_parameters']['keypoint_distance_threshold']
+                )
+                del lfdd_image1, lfdd_image2
+                torch.cuda.empty_cache()
+
+                # Concatenating outputs of LoFTR and LFDD models
+                output = {
+                    'keypoints1': np.concatenate((loftr_output['keypoints1'], lfdd_output['keypoints1']), axis=0),
+                    'keypoints2': np.concatenate((loftr_output['keypoints2'], lfdd_output['keypoints2']), axis=0),
+                    'scores': np.concatenate((loftr_output['confidences'], lfdd_output['distances']))
+                }
+                del loftr_output, lfdd_output
+
+                if len(output['keypoints1']) > matcher_config['solver_parameters']['keypoint_number_threshold']:
                     # Estimate fundamental matrix using predicted keypoints if number of keypoints is more than the specified threshold
-                    estimated_fundamental_matrix, inliers = loftr_utils.get_fundamental_matrix(
-                        keypoints1=output['keypoints0'],
-                        keypoints2=output['keypoints1'],
-                        ransac_reproj_threshold=config['ransac_reproj_threshold'],
-                        confidence=config['ransac_confidence'],
-                        max_iters=config['ransac_max_iters']
+                    estimated_fundamental_matrix, inliers = solver.get_fundamental_matrix(
+                        keypoints1=output['keypoints1'],
+                        keypoints2=output['keypoints2'],
+                        ransac_reproj_threshold=matcher_config['solver_parameters']['ransac_reproj_threshold'],
+                        confidence=matcher_config['solver_parameters']['ransac_confidence'],
+                        max_iters=matcher_config['solver_parameters']['ransac_max_iters']
                     )
                 else:
                     # Fundamental matrix is 3x3 zeros if number of keypoints is less than the specified threshold
@@ -84,18 +142,18 @@ if __name__ == '__main__':
                     inliers = None
 
                 # Decompose estimated fundamental matrix into rotation matrices and translation vector
-                estimated_rotation_matrix1, estimated_rotation_matrix2, t_prediction = geometry_utils.decompose_fundamental_matrix_with_camera_intrinsics(
+                estimated_rotation_matrix1, estimated_rotation_matrix2, t_prediction = geometry.decompose_fundamental_matrix_with_camera_intrinsics(
                     fundamental_matrix=estimated_fundamental_matrix,
                     camera_intrinsics1=image1_camera_intrinsics,
                     camera_intrinsics2=image2_camera_intrinsics
                 )
 
                 # Prepare ground truth and predictions for error calculation
-                q_prediction1 = geometry_utils.rotation_matrix_to_quaternion(estimated_rotation_matrix1)
-                q_prediction2 = geometry_utils.rotation_matrix_to_quaternion(estimated_rotation_matrix2)
+                q_prediction1 = geometry.rotation_matrix_to_quaternion(estimated_rotation_matrix1)
+                q_prediction2 = geometry.rotation_matrix_to_quaternion(estimated_rotation_matrix2)
                 r_ground_truth = np.dot(image2_rotation_matrix, image1_rotation_matrix.T)
                 t_ground_truth = (image2_translation_vector - np.dot(r_ground_truth, image1_translation_vector)).flatten()
-                q_ground_truth = geometry_utils.rotation_matrix_to_quaternion(r_ground_truth)
+                q_ground_truth = geometry.rotation_matrix_to_quaternion(r_ground_truth)
 
                 # Calculate rotation error in terms of degrees and translation error in terms of meters
                 rotation_error1, translation_error1 = metrics.calculate_rotation_and_translation_error(
@@ -122,12 +180,12 @@ if __name__ == '__main__':
                 print(f'Pair [{idx + 1 }/{len(df_pair_covisibility)}]: {row["pair"]} ({row["covisibility"]} covisibility) - Rotation Error {rotation_error:.4f} - Translation Error {translation_error:4f}')
 
                 # Visualize matched inlier keypoints for the image pair
-                if config['visualize']:
-                    loftr_utils.visualize_matches(
-                        image1=image1,
-                        image2=image2,
-                        keypoints1=output['keypoints0'],
-                        keypoints2=output['keypoints1'],
+                if matcher_config['visualize']:
+                    visualization.visualize_matches(
+                        image1=loftr_image1,
+                        image2=loftr_image2,
+                        keypoints1=output['keypoints1'],
+                        keypoints2=output['keypoints2'],
                         inliers=inliers
                     )
 
@@ -149,37 +207,89 @@ if __name__ == '__main__':
         mean_average_accuracies = mean_average_accuracies.mean(axis=0).to_dict()
         print(f'Global Score - mAA {mean_average_accuracies["mean_average_accuracy"]:.4f} mAA Rotation {mean_average_accuracies["mean_average_accuracy_rotation"]:.4f} mAA Translation {mean_average_accuracies["mean_average_accuracy_translation"]:.4f}')
 
-    elif config['task'] == 'inference':
+    elif matcher_config['task'] == 'test':
 
         df = pd.read_csv(settings.DATA / 'test.csv')
 
-        device = torch.device(config['device'])
-        matcher = LoFTR(pretrained='outdoor')
-        matcher = matcher.to(device).eval()
+        # Load pretrained weights for LoFTR model
+        device = torch.device(loftr_config['model_parameters']['device'])
+        loftr_model = LoFTR(loftr_config['model_parameters']['pretrained'])
+        loftr_model = loftr_model.to(device).eval()
+        # Load pretrained weights for LFDD model
+        lfdd_feature_extractor = lfdd.LocalFeatureDetectorDescriptor(**lfdd_config['model_parameters'])
+        lfdd_feature_extractor = lfdd_feature_extractor.to(device).eval()
+        lfdd_descriptor_matcher = DescriptorMatcher(**lfdd_config['matcher_parameters'])
+        lfdd_descriptor_matcher = lfdd_descriptor_matcher.to(device).eval()
 
         for idx, row in df.iterrows():
 
-            # Create image tensors and predict keypoints using LoFTR model
-            image1 = loftr_utils.get_image_tensor(
+            # Create image tensors from the image pair and match keypoints using LoFTR model
+            loftr_image1 = image_utils.get_image_tensor(
                 image=f'{settings.DATA}/test_images/{row["batch_id"]}/{row["image_1_id"]}.png',
-                longest_edge=config['image_longest_edge'],
-                device=config['device']
-            )
-            image2 = loftr_utils.get_image_tensor(
-                image=f'{settings.DATA}/test_images/{row["batch_id"]}/{row["image_2_id"]}.png',
-                longest_edge=config['image_longest_edge'],
-                device=config['device']
-            )
-            output = loftr_utils.match(image1=image1, image2=image2, matcher=matcher, confidence_threshold=config['keypoint_confidence_threshold'])
+                device=loftr_config['model_parameters']['device'],
+                longest_edge=loftr_config['preprocessing_parameters']['image_longest_edge'],
+                normalize=loftr_config['preprocessing_parameters']['image_normalize'],
+                grayscale=loftr_config['preprocessing_parameters']['image_grayscale']
 
-            if len(output['keypoints0']) > config['keypoint_number_threshold']:
+            )
+            loftr_image2 = image_utils.get_image_tensor(
+                image=f'{settings.DATA}/test_images/{row["batch_id"]}/{row["image_2_id"]}.png',
+                device=loftr_config['model_parameters']['device'],
+                longest_edge=loftr_config['preprocessing_parameters']['image_longest_edge'],
+                normalize=loftr_config['preprocessing_parameters']['image_normalize'],
+                grayscale=loftr_config['preprocessing_parameters']['image_grayscale']
+            )
+            loftr_output = loftr.match(
+                image1=loftr_image1,
+                image2=loftr_image2,
+                loftr_model=loftr_model,
+                confidence_threshold=loftr_config['matching_parameters']['keypoint_confidence_threshold']
+            )
+            if matcher_config['visualize'] is False:
+                del loftr_image1, loftr_image2
+                torch.cuda.empty_cache()
+
+            # Create image tensors from the image pair and match keypoints using LFDD model
+            lfdd_image1 = image_utils.get_image_tensor(
+                image=f'{settings.DATA}/test_images/{row["batch_id"]}/{row["image_1_id"]}.png',
+                device=lfdd_config['model_parameters']['device'],
+                longest_edge=lfdd_config['preprocessing_parameters']['image_longest_edge'],
+                normalize=lfdd_config['preprocessing_parameters']['image_normalize'],
+                grayscale=lfdd_config['preprocessing_parameters']['image_grayscale']
+            )
+            lfdd_image2 = image_utils.get_image_tensor(
+                image=f'{settings.DATA}/test_images/{row["batch_id"]}/{row["image_2_id"]}.png',
+                device=lfdd_config['model_parameters']['device'],
+                longest_edge=lfdd_config['preprocessing_parameters']['image_longest_edge'],
+                normalize=lfdd_config['preprocessing_parameters']['image_normalize'],
+                grayscale=lfdd_config['preprocessing_parameters']['image_grayscale']
+            )
+            lfdd_output = lfdd.match(
+                image1=lfdd_image1,
+                image2=lfdd_image2,
+                feature_extractor=lfdd_feature_extractor,
+                descriptor_matcher=lfdd_descriptor_matcher,
+                distance_threshold=lfdd_config['matching_parameters']['keypoint_distance_threshold']
+            )
+            del lfdd_image1, lfdd_image2
+            torch.cuda.empty_cache()
+
+            # Concatenating outputs of LoFTR and LFDD models
+            output = {
+                'keypoints1': np.concatenate((loftr_output['keypoints1'], lfdd_output['keypoints1']), axis=0),
+                'keypoints2': np.concatenate((loftr_output['keypoints2'], lfdd_output['keypoints2']), axis=0),
+                'scores': np.concatenate((loftr_output['confidences'], lfdd_output['distances']))
+            }
+            del loftr_output, lfdd_output
+
+            if len(output['keypoints1']) > matcher_config['solver_parameters']['keypoint_number_threshold']:
                 # Estimate fundamental matrix using predicted keypoints if number of keypoints is more than the specified threshold
-                estimated_fundamental_matrix, inliers = loftr_utils.get_fundamental_matrix(
-                    keypoints1=output['keypoints0'],
-                    keypoints2=output['keypoints1'],
-                    ransac_reproj_threshold=config['ransac_reproj_threshold'],
-                    confidence=config['ransac_confidence'],
-                    max_iters=config['ransac_max_iters']
+                estimated_fundamental_matrix, inliers = solver.get_fundamental_matrix(
+                    keypoints1=output['keypoints1'],
+                    keypoints2=output['keypoints2'],
+                    ransac_reproj_threshold=matcher_config['solver_parameters']['ransac_reproj_threshold'],
+                    confidence=matcher_config['solver_parameters']['ransac_confidence'],
+                    max_iters=matcher_config['solver_parameters']['ransac_max_iters']
                 )
             else:
                 # Fundamental matrix is 3x3 zeros if number of keypoints is less than the specified threshold
@@ -188,13 +298,12 @@ if __name__ == '__main__':
 
             df.loc[idx, 'fundamental_matrix'] = ' '.join([f'{x:.{8}e}' for x in estimated_fundamental_matrix.flatten()])
 
-            if config['visualize']:
-                loftr_utils.visualize_matches(
-                    image1=image1,
-                    image2=image2,
-                    keypoints1=output['keypoints0'],
-                    keypoints2=output['keypoints1'],
+            # Visualize matched inlier keypoints for the image pair
+            if matcher_config['visualize']:
+                visualization.visualize_matches(
+                    image1=loftr_image1,
+                    image2=loftr_image2,
+                    keypoints1=output['keypoints1'],
+                    keypoints2=output['keypoints2'],
                     inliers=inliers
                 )
-
-            break
