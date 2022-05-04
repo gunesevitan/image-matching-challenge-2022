@@ -1,4 +1,4 @@
-task: test
+task: validation
 validation_pairs: 500
 visualize: True
 
