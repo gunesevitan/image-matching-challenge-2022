@@ -1,0 +1,22 @@
+preprocessing_parameters:
+  image_longest_edge: 840
+  image_normalize: max_pixel_value
+  image_grayscale: True
+
+model_parameters:
+  orientation_module_name: OriNet
+  orientation_module_weights: orinet.pth
+  affine_module_name: LAFAffNetShapeEstimator
+  affine_module_weights: affnet.pth
+  detector_module_name: KeyNetDetector
+  detector_module_weights: keynet.pth
+  descriptor_module_name: HardNet8
+  descriptor_module_weights: hardnet8v2.pt
+  device: cuda
+
+matcher_parameters:
+  match_mode: snn
+  th: 0.9
+
+matching_parameters:
+  keypoint_distance_threshold: 0.0
