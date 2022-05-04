@@ -162,7 +162,7 @@ def match(image1, image2, feature_extractor, descriptor_matcher, distance_thresh
     output (dictionary of
             keypoints1 (numpy.ndarray of shape (n_keypoints, 2)),
             keypoints2 (numpy.ndarray of shape (n_keypoints, 2)),
-            confidence (numpy.ndarray of shape (n_keypoints))
+            distances (numpy.ndarray of shape (n_keypoints))
     ): Matched keypoints from first and second image and their distances
     """
 
@@ -180,7 +180,7 @@ def match(image1, image2, feature_extractor, descriptor_matcher, distance_thresh
     output = {
         'keypoints1': output['keypoints1'][keypoint_mask],
         'keypoints2': output['keypoints2'][keypoint_mask],
-        'confidences': output['distances'][keypoint_mask],
+        'distances': output['distances'][keypoint_mask],
     }
 
     return output
