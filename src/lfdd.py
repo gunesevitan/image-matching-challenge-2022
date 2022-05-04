@@ -109,11 +109,11 @@ def _extract_features(image, feature_extractor):
     with torch.no_grad():
         lafs, responses, descriptors = feature_extractor(image)
 
-    lafs = lafs.detach().cpu().numpy()
     responses = torch.squeeze(responses, dim=0).detach().cpu().numpy()
     descriptors = torch.squeeze(descriptors, dim=0)
     keypoints = get_laf_center(lafs)
     keypoints = keypoints.detach().cpu().numpy().reshape(-1, 2)
+    lafs = lafs.detach().cpu().numpy()
 
     return lafs, responses, descriptors, keypoints
 
@@ -144,7 +144,7 @@ def _match_descriptors(descriptors1, descriptors2, descriptor_matcher):
     return distances, indexes
 
 
-def match(image1, image2, feature_extractor, descriptor_matcher):
+def match(image1, image2, feature_extractor, descriptor_matcher, distance_threshold=0.1):
 
     """
     Match given two images with each other using given feature extractor and descriptor matcher
@@ -155,6 +155,7 @@ def match(image1, image2, feature_extractor, descriptor_matcher):
     image2 (torch.Tensor of shape (1, 1, height, width)): Second image tensor
     feature_extractor (torch.nn.Module): Local feature detector and descriptor model
     descriptor_matcher (torch.nn.Module): Descriptor matcher model
+    distance_threshold (float): Threshold to filter out keypoints with low distance
 
     Returns
     -------
@@ -173,6 +174,13 @@ def match(image1, image2, feature_extractor, descriptor_matcher):
         'keypoints1': keypoints1[indexes[:, 0]],
         'keypoints2': keypoints2[indexes[:, 1]],
         'distances': distances
+    }
+
+    keypoint_mask = output['distances'] >= distance_threshold
+    output = {
+        'keypoints1': output['keypoints1'][keypoint_mask],
+        'keypoints2': output['keypoints2'][keypoint_mask],
+        'confidences': output['distances'][keypoint_mask],
     }
 
     return output
