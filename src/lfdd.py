@@ -21,13 +21,13 @@ class LocalFeatureDetectorDescriptor(LocalFeature):
         Parameters
         ----------
         orientation_module_name (str): Name of the orientation module
-        orientation_module_weights (str): Path of the orientation module weights relative to models/deep_local_feature_detector_descriptors
+        orientation_module_weights (str): Path of the orientation module weights relative to models/lfdd
         affine_module_name (str): Name of the affine module
-        affine_module_weights (str): Path of the affine module weights relative to models/deep_local_feature_detector_descriptors
+        affine_module_weights (str): Path of the affine module weights relative to models/lfdd
         detector_module_name (str): Name of the detector module
-        detector_module_weights (str): Path of the detector module weights relative to models/deep_local_feature_detector_descriptors
+        detector_module_weights (str): Path of the detector module weights relative to models/lfdd
         descriptor_module_name (str): Name of the descriptor module
-        descriptor_module_weights (str): Path of the descriptor module weights relative to models/deep_local_feature_detector_descriptors
+        descriptor_module_weights (str): Path of the descriptor module weights relative to models/lfdd
         device (torch.device): Location of model
 
         Returns
@@ -63,11 +63,11 @@ class LocalFeatureDetectorDescriptor(LocalFeature):
 
         # Load pretrained weights for the detector module
         if orientation_module_weights is not None:
-            detector_module.ori.angle_detector.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / orientation_module_weights)['state_dict'])
+            detector_module.ori.angle_detector.load_state_dict(torch.load(settings.MODELS / 'lfdd' / orientation_module_weights)['state_dict'])
         if affine_module_weights is not None:
-            detector_module.aff.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / affine_module_weights)['state_dict'])
+            detector_module.aff.load_state_dict(torch.load(settings.MODELS / 'lfdd' / affine_module_weights)['state_dict'])
         if detector_module_weights is not None:
-            detector_module.model.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / detector_module_weights)['state_dict'])
+            detector_module.model.load_state_dict(torch.load(settings.MODELS / 'lfdd' / detector_module_weights)['state_dict'])
 
         # Instantiate specified descriptor module
         if descriptor_module_name == 'HardNet8':
@@ -83,7 +83,7 @@ class LocalFeatureDetectorDescriptor(LocalFeature):
 
         # Load pretrained weights for the descriptor module
         if descriptor_module_weights is not None:
-            descriptor_module.descriptor.load_state_dict(torch.load(settings.MODELS / 'deep_local_feature_detector_descriptors' / descriptor_module_weights))
+            descriptor_module.descriptor.load_state_dict(torch.load(settings.MODELS / 'lfdd' / descriptor_module_weights))
 
         super().__init__(detector_module, descriptor_module)
 
