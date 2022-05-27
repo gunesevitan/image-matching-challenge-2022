@@ -1,3 +1,5 @@
+import logging
+import json
 from tqdm import tqdm
 from glob import glob
 import numpy as np
@@ -5,8 +7,6 @@ import cv2
 
 import settings
 
-
-STATISTICS = {'mean': [0.50201953, 0.50477692, 0.49493494], 'std': [0.26986689, 0.27720259, 0.30068508]}
 
 if __name__ == '__main__':
 
@@ -29,5 +29,8 @@ if __name__ == '__main__':
     mean = pixel_sum / pixel_count
     var = (pixel_squared_sum / pixel_count) - (mean ** 2)
     std = np.sqrt(var)
+    dataset_statistics = {'mean': list(mean), 'std': list(std)}
 
-    print(f'{len(filenames)} Images - Mean: {mean} - Standard Deviation: {std}')
+    logging.info(f'{len(filenames)} Images - Mean: {mean} - Standard Deviation: {std}')
+    with open(settings.DATA / 'dataset_statistics.json', 'w', encoding='utf-8') as f:
+        json.dump(dataset_statistics, f, ensure_ascii=False, indent=4)
