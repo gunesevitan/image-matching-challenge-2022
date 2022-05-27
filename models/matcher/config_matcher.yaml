@@ -1,6 +1,6 @@
-task: validation
+task: test
 validation_pairs: 500
-visualize: True
+visualize: False
 
 scene_covisibility_threshold:
   brandenburg_gate: 0.1
