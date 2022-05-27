@@ -86,3 +86,9 @@ Matcher can be used in two modes; validation and test.
 
 * Validation mode calculates mean Average Accuracy (mAA) of the selected scenes and sampled image pairs in training set.
 * Test mode estimates fundamental matrix of image pairs in test set and writes them into `submission.csv` file.
+
+Visualization can be set to True in order to visualize inlier keypoints detected on image pair.
+
+![image test_image_pair_1](eda/test_image_pair_1.png)
+![image test_image_pair_2](eda/test_image_pair_2.png)
+![image test_image_pair_3](eda/test_image_pair_3.png)
