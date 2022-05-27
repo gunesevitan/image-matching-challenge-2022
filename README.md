@@ -8,7 +8,7 @@ Creating a machine learning algorithm that registers two images from different v
 
 ```
 git clone https://github.com/gunesevitan/image-matching-challenge-2022.git
-cd anadolu-image-matching-challenge
+cd image-matching-challenge-2022
 virtualenv --python=/usr/bin/python3.9 venv
 source venv/bin/activate
 pip install -r requirements.txt
